@@ -1,4 +1,5 @@
 import mysql.connector
+import file_enc
 
 
 class DbManager:
@@ -7,9 +8,15 @@ class DbManager:
         self.cursor = self.db.cursor()
 
     def insert(self, username, password, url, salt, nonce, tag, note=""):
-        query = "INSERT INTO passmanager (username, password, url, note, salt, nonce, tag) VALUES (%s, %s, %s, %s, %s, %s, %s)"
-        self.cursor.execute(query, (username, password, url, note, salt, nonce, tag))
+        query = "INSERT INTO passmanager (username, password, url, note) VALUES (%s, %s, %s, %s)"
+        self.cursor.execute(query, (username, password, url, note))
         self.db.commit()
+        id = self.cursor.lastrowid
+        salts = file_enc.read_from_csv('data/salts.csv')
+        new_row = {'id': id, 'salt': salt}
+        salts.append(new_row)
+        file_enc.write_to_csv(salts, 'data/salts.csv', ['id', 'salt'])
+
 
     def get_by_url(self, url):
         query = "SELECT id, url, username, note FROM passmanager WHERE url LIKE %s"
