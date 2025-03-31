@@ -21,7 +21,7 @@ def read_encrypted_file(filename, key):
     cipher = Fernet(key)
     with open(filename, 'rb') as file:
         enc_text = file.read()
-    plain_text = cipher.decrypt(enc_text).decode()
+    plain_text = cipher.decrypt(enc_text.strip()).decode()
     return plain_text
 
 

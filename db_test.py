@@ -13,10 +13,9 @@ class DbManager:
         self.db.commit()
         id = self.cursor.lastrowid
         salts = file_enc.read_from_csv('data/salts.csv')
-        new_row = {'id': id, 'salt': salt}
+        new_row = {'id': id, 'salt': salt, 'nonce': nonce, 'tag': tag}
         salts.append(new_row)
-        file_enc.write_to_csv(salts, 'data/salts.csv', ['id', 'salt'])
-
+        file_enc.write_to_csv(salts, 'data/salts.csv', ['id', 'salt', 'nonce', 'tag'])
 
     def get_by_url(self, url):
         query = "SELECT id, url, username, note FROM passmanager WHERE url LIKE %s"

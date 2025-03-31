@@ -1,4 +1,6 @@
+import csv
 import getpass
+import io
 import sys
 
 from argon2 import PasswordHasher
@@ -6,6 +8,8 @@ from Cryptodome.Cipher import AES
 from Cryptodome.Random import get_random_bytes
 import hashlib
 from base64 import b64encode, b64decode
+
+import file_enc
 from db_test import DbManager
 
 
@@ -64,12 +68,24 @@ def get_pass():
     if row is None:
         print('Invalid ID!', file=sys.stderr)
         return
-    print(row[3], row[4], row[5], row[6])
+    salts = file_enc.read_encrypted_file('data/salts.csv', MASTER_PASSWORD_HASH)
+    temp = io.StringIO(salts)
+    reader = csv.DictReader(temp)
+    salts_dict = [row for row in reader]
+    salt_row = None
+    for r in salts_dict:
+        if int(r['id']) == choice:
+            salt_row = r
+            break
+    if salt_row is None:
+        print('Error reading salts!', file=sys.stderr)
+        exit(1)
+    # print(row[3], salt_row['salt'], salt_row['nonce'], salt_row['tag'])
     enc_dict = {
         'cipher_text': row[3],
-        'salt': row[4],
-        'nonce': row[5],
-        'tag': row[6]
+        'salt': salt_row['salt'],
+        'nonce': salt_row['nonce'],
+        'tag': salt_row['tag']
     }
     print(decrypt(enc_dict, MASTER_PASSWORD_HASH))
 
