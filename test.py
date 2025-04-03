@@ -1,9 +1,10 @@
 import csv
 import getpass
 import io
+import os.path
 import sys
 
-from argon2 import PasswordHasher
+from argon2.low_level import hash_secret_raw, Type
 from Cryptodome.Cipher import AES
 from Cryptodome.Random import get_random_bytes
 import hashlib
@@ -11,13 +12,15 @@ from base64 import b64encode, b64decode
 
 import file_enc
 from db_test import DbManager
+from master_pass_db import MasterPassManager
 
 
 MASTER_PASSWORD_HASH = '$argon2id$v=19$m=65536,t=3,p=4$RXs4DyzttrUtklEinbfeWA$VxGKk4nmUoR9Hw63tsfCI68liFUgNjb79eh7horE9+4'
 
-def encrypt(plain_text, password):
+
+def encrypt(plain_text, key):
     salt = get_random_bytes(AES.block_size)
-    pk = hashlib.scrypt(password.encode(), salt=salt, n=2**14, r=8, p=1, dklen=32)
+    pk = hashlib.scrypt(key.encode(), salt=salt, n=2 ** 14, r=8, p=1, dklen=32)
 
     cipher_config = AES.new(pk, AES.MODE_GCM)
     cipher_text, tag = cipher_config.encrypt_and_digest(bytes(plain_text, 'utf-8'))
@@ -29,13 +32,13 @@ def encrypt(plain_text, password):
     }
 
 
-def decrypt(enc_dict, password):
+def decrypt(enc_dict, key):
     salt = b64decode(enc_dict['salt'])
     cipher_text = b64decode(enc_dict['cipher_text'])
     nonce = b64decode(enc_dict['nonce'])
     tag = b64decode(enc_dict['tag'])
 
-    pk = hashlib.scrypt(password.encode(), salt=salt, n=2**14, r=8, p=1, dklen=32)
+    pk = hashlib.scrypt(key.encode(), salt=salt, n=2 ** 14, r=8, p=1, dklen=32)
     cipher = AES.new(pk, AES.MODE_GCM, nonce=nonce)
     decrypted = cipher.decrypt_and_verify(cipher_text, tag)
     return decrypted
@@ -113,5 +116,34 @@ def main():
             return 1
 
 
+def hash_master_pass(password: bytes, salt):
+    time_cost = 3
+    memory_cost = 65536
+    parallelism = 4
+    hash_len = 32
+
+    derived_hash = hash_secret_raw(
+        secret=password,
+        salt=salt,
+        time_cost=time_cost,
+        memory_cost=memory_cost,
+        parallelism=parallelism,
+        hash_len=hash_len,
+        type=Type.ID
+    )
+    return derived_hash
+
+
+def pass_hash_test():
+    mpass_manager = MasterPassManager()
+    if not mpass_manager.is_set():
+        mpass_manager.set_master_salt()
+    master_password = getpass.getpass('Enter master password: ')
+    salt = mpass_manager.get_salt()
+    master_hash = hash_master_pass(master_password.encode('utf-8'), salt)
+    print(b64encode(master_hash))
+
+
 if __name__ == '__main__':
-    main()
+    pass_hash_test()
+    # main()
