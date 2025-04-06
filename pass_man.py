@@ -1,0 +1,138 @@
+import csv
+import getpass
+import io
+import os.path
+import sys
+
+import cryptography.fernet
+from argon2.low_level import hash_secret_raw, Type
+from Cryptodome.Cipher import AES
+from Cryptodome.Random import get_random_bytes
+import hashlib
+from base64 import b64encode, b64decode
+
+import file_enc
+from db_manager import DbManager
+from master_pass_db import MasterPassManager
+
+
+class PasswordManager:
+    def __init__(self):
+        # Test string to be encrypted and checked if master password was correct
+        self.TEST_STR = "Master password correct!"
+
+        # Database manager instance
+        self.db_manager = DbManager()
+        # Master password manager instance
+        self.master_passmgr = MasterPassManager()
+        # Master password hash
+        self.master_pass_hash = None
+        # Bool if master password was set
+        self.is_set = self.master_passmgr.is_set()
+
+    def encrypt(self, plain_text, key: bytes, salt=None):
+        """
+        Encrypts plaintext using AES encryption and scrypt to derive key.
+        :param salt: Optional: Salt used for encryption, if not provided, salt will be randomly generated.
+        :param plain_text: Text to be encrypted.
+        :param key: Key to be used for AES encryption, actual key will be derived from this value.
+        :return: Dict of cipher text, salt, nonce and tag.
+        """
+        if salt is None:
+            salt = get_random_bytes(AES.block_size)
+        pk = hashlib.scrypt(key, salt=salt, n=2 ** 14, r=8, p=1, dklen=32)
+
+        cipher_config = AES.new(pk, AES.MODE_GCM)
+        cipher_text, tag = cipher_config.encrypt_and_digest(bytes(plain_text, 'utf-8'))
+        return {
+            'cipher_text': b64encode(cipher_text).decode('utf-8'),
+            'salt'       : b64encode(salt).decode('utf-8'),
+            'nonce'      : b64encode(cipher_config.nonce).decode('utf-8'),
+            'tag'        : b64encode(tag).decode('utf-8')
+        }
+
+    def decrypt(self, enc_dict, key: bytes):
+        """
+        Decrypts cipher text using AES, verifies it and returns it.
+        :param enc_dict: Dict containing cipher text, salt, nonce and tag in base64 format.
+        :param key: Key to be used for decryption, actual key will be derived from this value.
+        :return: bytes: Decrypted cipher text.
+        """
+        salt = b64decode(enc_dict['salt'])
+        cipher_text = b64decode(enc_dict['cipher_text'])
+        nonce = b64decode(enc_dict['nonce'])
+        tag = b64decode(enc_dict['tag'])
+
+        pk = hashlib.scrypt(key, salt=salt, n=2 ** 14, r=8, p=1, dklen=32)
+        cipher = AES.new(pk, AES.MODE_GCM, nonce=nonce)
+        decrypted = cipher.decrypt_and_verify(cipher_text, tag)
+        return decrypted
+
+    def hash_master_pass(self, password: bytes, salt):
+        """
+        Hashes master password.
+        :param password: Master password for hashing.
+        :param salt: Master password salt.
+        :return: bytes: Hashed master password.
+        """
+        time_cost = 3
+        memory_cost = 65536
+        parallelism = 4
+        hash_len = 32
+        derived_hash = hash_secret_raw(
+            secret=password,
+            salt=salt,
+            time_cost=time_cost,
+            memory_cost=memory_cost,
+            parallelism=parallelism,
+            hash_len=hash_len,
+            type=Type.ID
+        )
+        return derived_hash
+
+    def setup(self):
+        """
+        Sets up testing file for authentication.
+        :return:
+        """
+        master_password = getpass.getpass('Enter your new master password: ')
+        # Get master password hash and generate salt for master password. Only salt is stored
+        salt = self.master_passmgr.set_master_salt()
+        if not salt:
+            print('Error setting master password salt', file=sys.stderr)
+            exit(1)
+        salt = self.master_passmgr.get_salt()
+        self.master_pass_hash = self.hash_master_pass(master_password.encode('utf-8'), salt)
+        result = self.encrypt(self.TEST_STR, self.master_pass_hash, salt)
+        self.master_passmgr.set_test_str(result['cipher_text'], result['nonce'], result['tag'])
+
+    def authenticate(self):
+        """
+        Authenticates user.
+        :return: bool: True if supplied password is correct, False otherwise.
+        """
+        master_password = getpass.getpass('Enter your master password: ')
+        # Get master password hash and generate salt for master password. Only salt is stored
+        self.master_pass_hash = self.hash_master_pass(master_password.encode('utf-8'), self.master_passmgr.get_salt())
+        test_dict = self.master_passmgr.get_test_str()
+        try:
+            result = self.decrypt(test_dict, self.master_pass_hash)
+        except ValueError:
+            print('Master password incorrect', file=sys.stderr)
+            exit(1)
+        return self.TEST_STR == result.decode()
+
+
+def main():
+    pm = PasswordManager()
+    if not pm.is_set:
+        pm.setup()
+    else:
+        if not pm.authenticate():
+            print('Wrong master password.', file=sys.stderr)
+        else:
+            print('Master password correct!')
+
+
+if __name__ == '__main__':
+    main()

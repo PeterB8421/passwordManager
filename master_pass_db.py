@@ -11,11 +11,15 @@ class MasterPassManager:
         self.cursor = self.db.cursor()
 
     def is_set(self):
+        """
+        Check if master password is set.
+        :return:
+        """
         query = 'SELECT setup FROM masterpass'
         self.cursor.execute(query)
         result = self.cursor.fetchone()
         if result is None:
-            query = 'INSERT INTO masterpass (salt, setup) VALUES (NULL, 0)'
+            query = 'INSERT INTO masterpass (salt, setup, test_str) VALUES (NULL, 0, NULL)'
             self.cursor.execute(query)
             self.db.commit()
             return False
@@ -25,6 +29,10 @@ class MasterPassManager:
             return True
 
     def set_master_salt(self):
+        """
+        If master password is not set, generate salt for it.
+        :return: False if master password is set, True when master password is not set.
+        """
         if self.is_set():
             print('Master password already set', file=sys.stderr)
             return False
@@ -36,9 +44,13 @@ class MasterPassManager:
         return True
 
     def get_salt(self):
+        """
+        If master password is set, gets master password salt from database.
+        :return: Bytes: master password salt or None if master password is not set.
+        """
         if not self.is_set():
             print('Master password is not set', file=sys.stderr)
-            return ''
+            return None
         query = 'SELECT salt FROM masterpass'
         self.cursor.execute(query)
         result = self.cursor.fetchone()
@@ -46,3 +58,14 @@ class MasterPassManager:
             print('Error fetching salt from db', file=sys.stderr)
             return ''
         return b64decode(result[0])
+
+    def set_test_str(self, test_str: str, nonce: str, tag: str):
+        query = 'UPDATE masterpass SET test_str = %s, nonce = %s, tag = %s'
+        self.cursor.execute(query, [test_str, nonce, tag])
+        self.db.commit()
+
+    def get_test_str(self):
+        query = 'SELECT test_str, salt, nonce, tag FROM masterpass'
+        self.cursor.execute(query)
+        result = self.cursor.fetchone()
+        return {'cipher_text': result[0], 'salt': result[1], 'nonce': result[2], 'tag': result[3]}

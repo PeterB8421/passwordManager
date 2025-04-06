@@ -11,7 +11,7 @@ import hashlib
 from base64 import b64encode, b64decode
 
 import file_enc
-from db_test import DbManager
+from db_manager import DbManager
 from master_pass_db import MasterPassManager
 
 
