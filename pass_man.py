@@ -90,49 +90,31 @@ class PasswordManager:
         )
         return derived_hash
 
-    def setup(self):
+    def setup(self, master_password):
         """
         Sets up testing file for authentication.
         :return:
         """
-        master_password = getpass.getpass('Enter your new master password: ')
         # Get master password hash and generate salt for master password. Only salt is stored
         salt = self.master_passmgr.set_master_salt()
         if not salt:
-            print('Error setting master password salt', file=sys.stderr)
-            exit(1)
+            return False
         salt = self.master_passmgr.get_salt()
         self.master_pass_hash = self.hash_master_pass(master_password.encode('utf-8'), salt)
         result = self.encrypt(self.TEST_STR, self.master_pass_hash, salt)
         self.master_passmgr.set_test_str(result['cipher_text'], result['nonce'], result['tag'])
+        return True
 
-    def authenticate(self):
+    def authenticate(self, master_password):
         """
         Authenticates user.
         :return: bool: True if supplied password is correct, False otherwise.
         """
-        master_password = getpass.getpass('Enter your master password: ')
         # Get master password hash and generate salt for master password. Only salt is stored
         self.master_pass_hash = self.hash_master_pass(master_password.encode('utf-8'), self.master_passmgr.get_salt())
         test_dict = self.master_passmgr.get_test_str()
         try:
             result = self.decrypt(test_dict, self.master_pass_hash)
         except ValueError:
-            print('Master password incorrect', file=sys.stderr)
-            exit(1)
+            return False
         return self.TEST_STR == result.decode()
-
-
-def main():
-    pm = PasswordManager()
-    if not pm.is_set:
-        pm.setup()
-    else:
-        if not pm.authenticate():
-            print('Wrong master password.', file=sys.stderr)
-        else:
-            print('Master password correct!')
-
-
-if __name__ == '__main__':
-    main()
