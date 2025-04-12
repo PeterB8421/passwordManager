@@ -49,3 +49,8 @@ class DbManager:
         query = "SELECT * FROM passmanager WHERE id = %s"
         self.cursor.execute(query, [row_id])
         return self.cursor.fetchone()
+
+    def get_all(self):
+        query = "SELECT * FROM passmanager"
+        self.cursor.execute(query)
+        return self.cursor.fetchall()

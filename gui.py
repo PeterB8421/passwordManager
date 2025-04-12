@@ -1,3 +1,4 @@
+import tkinter
 import tkinter as tk
 from tkinter import ttk, messagebox
 from pass_man import PasswordManager
@@ -35,6 +36,11 @@ class PasswordManagerApp(tk.Tk):
         self.login_frame.pack_forget()
         self.main_frame.pack(fill="both", expand=True)
 
+    def show_login_screen(self):
+        """Hide the main frame and show the login frame again."""
+        self.main_frame.pack_forget()
+        self.login_frame.pack(fill="both", expand=True)
+
 
 def show_temporary_popup(root, message, color, duration_ms=2000):
     popup = tk.Toplevel(root)
@@ -42,7 +48,7 @@ def show_temporary_popup(root, message, color, duration_ms=2000):
     popup.overrideredirect(True)  # remove window borders (optional)
 
     # Place the popup near the main window
-    x = root.winfo_rootx()
+    x = root.winfo_rootx() + 200
     y = root.winfo_rooty()
     popup.geometry(f"+{x}+{y}")
 
@@ -70,10 +76,7 @@ class LoginFrame(tk.Frame):
     def check_password(self):
         """Check if the entered password is correct; if so, show main screen."""
         entered_password = self.entry_password.get()
-        # if entered_password == MASTER_PASSWORD:
-        #     self.master.show_main_screen()
-        # else:
-        #     messagebox.showerror("Error", "Incorrect master password!")
+        self.entry_password.delete(0, 'end')
         if not self.master.pm.is_set:
             if not self.master.pm.setup(entered_password):
                 messagebox.showerror("Error", "There was a problem creating the master password.")
@@ -92,27 +95,50 @@ class MainScreenFrame(tk.Frame):
         super().__init__(master)
         self.master = master
 
+        top_frame = tk.Frame(self)
+        top_frame.pack(side="top", fill="x")
+        logout_btn = tk.Button(top_frame, text="Logout", command=self.logout)
+        logout_btn.pack(side="left", padx=10, pady=10)
+
         # Label at the top
         self.label_title = tk.Label(self, text="Password database", font=("Arial", 14, "bold"))
         self.label_title.pack(pady=10)
 
-        # Create a Treeview to list passwords
-        self.tree = ttk.Treeview(self, columns=("Domain", "Username", "Note", "Actions"), show="headings")
-        self.tree.heading("Domain", text="Domain")
-        self.tree.heading("Username", text="Username")
-        self.tree.heading("Note", text="Note")
-        self.tree.heading("Actions", text="Actions")
+        rows = self.master.pm.get_all_passwords()
+        print(rows)
+        if not rows:
+            empty_label = tk.Label(self, text="The database is empty")
+            empty_label.pack()
+        else:
+            # Create a Treeview to list passwords
+            self.tree = ttk.Treeview(self, columns=("Domain", "Username", "Note", "Actions"), show="headings")
+            self.tree.heading("Domain", text="Domain")
+            self.tree.heading("Username", text="Username")
+            self.tree.heading("Note", text="Note")
+            self.tree.heading("Actions", text="Actions")
 
-        column_names = ("Domain", "Username", "Note", "Actions")
-        for col in column_names:
-            self.tree.heading(col, text=col)
-            self.tree.column(col, width=100, anchor="w", stretch=True)
+            column_names = ("Domain", "Username", "Note", "Actions")
+            for col in column_names:
+                self.tree.heading(col, text=col)
+                self.tree.column(col, width=100, anchor="w", stretch=True)
 
-        # Insert the fake DB data into Treeview
-        # for record in FAKE_DB:
-        #     self.tree.insert("", tk.END, values=record)
+            # Insert the fake DB data into Treeview
+            # for record in FAKE_DB:
+            #     self.tree.insert("", tk.END, values=record)
 
-        self.tree.pack(fill="both", expand=True)
+            self.tree.pack(fill="both", expand=True)
+
+        bottom_frame = tk.Frame(self)
+        bottom_frame.pack(side="bottom", fill="x")
+
+        # Add password button, aligned to the right
+        add_button = tk.Button(bottom_frame, text="Add password")
+        add_button.pack(side="right", padx=10, pady=10)
+
+    def logout(self):
+        self.master.pm.logout()
+        show_temporary_popup(self, "Logout successful!", "lightgreen")
+        self.master.show_login_screen()
 
 
 if __name__ == "__main__":

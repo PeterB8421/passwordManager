@@ -118,3 +118,9 @@ class PasswordManager:
         except ValueError:
             return False
         return self.TEST_STR == result.decode()
+
+    def get_all_passwords(self):
+        return self.db_manager.get_all()
+
+    def logout(self):
+        self.master_pass_hash = None
