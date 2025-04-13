@@ -124,3 +124,12 @@ class PasswordManager:
 
     def logout(self):
         self.master_pass_hash = None
+
+    def add(self, url, username, password, note=""):
+        enc_pass = self.encrypt(password, self.master_pass_hash)
+        self.db_manager.insert(username, key=self.master_pass_hash, password=enc_pass['cipher_text'], salt=enc_pass['salt'],
+                               nonce=enc_pass['nonce'], tag=enc_pass['tag'], url=url, note=note)
+
+    def get_by_id(self, row_id):
+
+        return self.db_manager.get_by_id(row_id)
