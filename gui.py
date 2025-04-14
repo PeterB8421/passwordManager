@@ -29,6 +29,7 @@ class PasswordManagerApp(tk.Tk):
         """Hide the login frame and show the main screen."""
         self.current_frame.pack_forget()
         self.current_frame = self.main_frame
+        self.main_frame.refresh()
         self.current_frame.pack(fill="both", expand=True)
 
     def show_login_screen(self):
@@ -198,6 +199,10 @@ class EditPasswordFrame(tk.Frame):
         self.entry_password = tk.Entry(self, show="*")
         self.entry_password.grid(row=3, column=1, padx=5, pady=5)
 
+        # Button to toggle password visibility
+        self.show_password_btn = tk.Button(self, text="Show", command=self.toggle_password)
+        self.show_password_btn.grid(row=3, column=2, padx=5, pady=5)
+
         # Note
         tk.Label(self, text="Note:").grid(row=4, column=0, sticky="e", padx=5, pady=5)
         self.entry_note = tk.Entry(self)
@@ -240,8 +245,11 @@ class EditPasswordFrame(tk.Frame):
         self.entry_username.delete(0, tk.END)
         self.entry_username.insert(0, username)
 
-        self.entry_password.delete(0, tk.END)
-        self.entry_password.insert(0, password)
+        if password is not None:
+            self.entry_password.delete(0, tk.END)
+            self.entry_password.insert(0, password)
+        else:
+            show_temporary_popup(self, "Error decrypting password", "red")
 
         self.entry_note.delete(0, tk.END)
         self.entry_note.insert(0, note)
@@ -257,34 +265,47 @@ class EditPasswordFrame(tk.Frame):
             messagebox.showwarning("Warning", "Please fill required fields.")
             return
 
-        # success = self.master.pm.update(self.selected_id, domain, username, password, note)
-        # if success:
-        #     messagebox.showinfo("Success", "Record updated.")
-        #     self.master.show_main_screen()  # go back
-        # else:
-        #     messagebox.showerror("Error", "Failed to update record.")
+        success = self.master.pm.update_by_id(self.selected_id, domain, username, password, note)
+        if success:
+            show_temporary_popup(self, "Changes saved!", "lightgreen")
+            self.master.show_main_screen()  # go back
+        else:
+            show_temporary_popup(self, "Error saving changes", "red")
 
     def copy_password(self):
         """Copy the current password to clipboard."""
-        pass
-        # password = self.entry_password.get()
-        # if password:
-        #     self.clipboard_clear()
-        #     self.clipboard_append(password)
-        #     messagebox.showinfo("Copied", "Password copied to clipboard.")
+        password = self.entry_password.get()
+        if password:
+            self.clipboard_clear()
+            self.clipboard_append(password)
+            show_temporary_popup(self, "Password copied!", "lightblue")
 
     def delete_entry(self):
         """Delete this record from the database."""
         pass
-        # confirm = messagebox.askyesno("Confirm", "Are you sure you want to delete this record?")
-        # if confirm:
-        #     self.master.pm.delete(self.selected_id)
-        #     messagebox.showinfo("Deleted", "Record has been deleted.")
-        #     self.master.show_main_screen()
+        confirm = messagebox.askyesno("Confirm", "Are you sure you want to delete this record?")
+        if confirm:
+            self.master.pm.delete_by_id(self.selected_id)
+            show_temporary_popup(self, "Password deleted!", "lightgreen")
+            self.master.show_main_screen()
 
     def cancel(self):
         """Return to the main screen without saving."""
         self.master.show_main_screen()
+
+    def toggle_password(self):
+        """
+        Toggle between showing and hiding the password text in 'entry_password'.
+        """
+        current_show = self.entry_password.cget("show")
+        if current_show == "*":
+            # It's currently hidden; show it
+            self.entry_password.config(show="")
+            self.show_password_btn.config(text="Hide")
+        else:
+            # It's currently shown; hide it
+            self.entry_password.config(show="*")
+            self.show_password_btn.config(text="Show")
 
 
 class MainScreenFrame(tk.Frame):
@@ -338,10 +359,10 @@ class MainScreenFrame(tk.Frame):
                 self.tree.column(col, width=120, anchor="w", stretch=True)
 
             # Insert rows
-            # Suppose each row is (id, domain, username, password, note)
+            # Each row is (id, domain, username, password, note)
             for row in rows:
                 row_id, domain, username, pwd, note = row
-                # We'll store row_id in the "tags" or item dictionary for easy retrieval
+                # Store row_id in the "tags" or item dictionary for easy retrieval
                 self.tree.insert(
                     "",
                     tk.END,

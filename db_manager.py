@@ -2,6 +2,16 @@ import mysql.connector
 import file_enc
 
 
+def get_salt_by_id(record_id, key):
+    salts = file_enc.read_from_csv('data/salts.csv', key)
+    salt_dict = None
+    for record in salts:
+        if record['id'] == str(record_id):
+            salt_dict = record
+            break
+    return salt_dict, salts
+
+
 class DbManager:
     def __init__(self):
         self.db = mysql.connector.connect(host='localhost', user='python', password='MYOP9317a', database='python', charset='utf8')
@@ -54,3 +64,31 @@ class DbManager:
         query = "SELECT * FROM passmanager"
         self.cursor.execute(query)
         return self.cursor.fetchall()
+
+    def update_by_id(self, key, row_id, username, password, url, note, salt, nonce, tag):
+        salt_dict, salts = get_salt_by_id(row_id, key)
+        if salt_dict is None:
+            return False
+        print('Before: ', salts)
+        salts.remove(salt_dict)
+        salt_dict['salt'] = salt
+        salt_dict['nonce'] = nonce
+        salt_dict['tag'] = tag
+        salts.append(salt_dict)
+        print('After: ', salts)
+        file_enc.write_to_csv(salts, 'data/salts.csv', ['id', 'salt', 'nonce', 'tag'], key)
+
+        query = "UPDATE passmanager SET url = %s, note = %s, username = %s, password = %s WHERE id = %s"
+        self.cursor.execute(query, [url, note, username, password, row_id])
+        self.db.commit()
+        return True
+
+    def delete_by_id(self, row_id, key):
+        query = "DELETE FROM passmanager WHERE id = %s"
+        self.cursor.execute(query, [row_id])
+        self.db.commit()
+
+        salt_dict, salts = get_salt_by_id(row_id, key)
+        if salt_dict is not None:
+            salts.remove(salt_dict)
+            file_enc.write_to_csv(salts, 'data/salts.csv', ['id', 'salt', 'nonce', 'tag'], key)

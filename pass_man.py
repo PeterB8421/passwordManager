@@ -11,6 +11,7 @@ from Cryptodome.Random import get_random_bytes
 import hashlib
 from base64 import b64encode, b64decode
 
+import db_manager
 import file_enc
 from db_manager import DbManager
 from master_pass_db import MasterPassManager
@@ -131,5 +132,35 @@ class PasswordManager:
                                nonce=enc_pass['nonce'], tag=enc_pass['tag'], url=url, note=note)
 
     def get_by_id(self, row_id):
+        r_id, url, username, password, note = self.db_manager.get_by_id(row_id)
+        salt_dict, _ = db_manager.get_salt_by_id(row_id, self.master_pass_hash)
+        if salt_dict is None:
+            print('Error getting salts', file=sys.stderr)
+            return row_id, url, username, password, note
+        try:
+            password = self.decrypt({
+                'cipher_text': password,
+                'salt': salt_dict['salt'],
+                'nonce': salt_dict['nonce'],
+                'tag': salt_dict['tag']
+            }, self.master_pass_hash)
+        except ValueError:
+            password = None
+            print('Error decrypting password', file=sys.stderr)
+        return row_id, url, username, password, note
 
-        return self.db_manager.get_by_id(row_id)
+    def update_by_id(self, row_id, url, username, password, note=""):
+        salt_dict, _ = db_manager.get_salt_by_id(row_id, self.master_pass_hash)
+        if salt_dict is None:
+            print('Error getting salts', file=sys.stderr)
+            return False
+        try:
+            password_enc = self.encrypt(password, self.master_pass_hash)
+        except ValueError:
+            print('Error encrypting password', file=sys.stderr)
+            return False
+        return self.db_manager.update_by_id(self.master_pass_hash, row_id, username, password_enc['cipher_text'],
+                                            url, note, password_enc['salt'], password_enc['nonce'], password_enc['tag'])
+
+    def delete_by_id(self, row_id):
+        self.db_manager.delete_by_id(row_id, self.master_pass_hash)
