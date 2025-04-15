@@ -14,6 +14,11 @@ from master_pass_db import MasterPassManager
 
 
 def generate_password(length):
+    """
+    Generates randomized strong password
+    :param length: Length of the password (must be at least 8)
+    :return: Generated password in string format
+    """
     # Minimum length
     if length < 8:
         return None
@@ -24,7 +29,11 @@ def generate_password(length):
 
 
 def verify_pass_strength(password: str):
-    """Checks if password is strong enough."""
+    """
+    Verifies password strength
+    :param password: Password to be verified in string format
+    :return: True if password complies with policy, False otherwise
+    """
     if len(password) < 8:
         return False
     match = re.search(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#]).+$", password)
@@ -108,7 +117,8 @@ class PasswordManager:
     def setup(self, master_password):
         """
         Sets up testing file for authentication.
-        :return:
+        :param master_password: Master password to encrypt the testing string
+        :return: True if everything is set correctly, False on error or when weak password is supplied
         """
         if not verify_pass_strength(master_password):
             print("Weak master password!", file=sys.stderr)
@@ -127,6 +137,7 @@ class PasswordManager:
     def authenticate(self, master_password):
         """
         Authenticates user.
+        :param master_password: Master password used to try decryption of the testing string.
         :return: bool: True if supplied password is correct, False otherwise.
         """
         # Get master password hash and generate salt for master password. Only salt is stored
@@ -139,17 +150,38 @@ class PasswordManager:
         return self.TEST_STR == result.decode()
 
     def get_all_passwords(self):
+        """
+        Returns all rows from the database
+        :return: List of tuples containing rows in the database
+        """
         return self.db_manager.get_all()
 
     def logout(self):
+        """
+        When logging out, remove master password hash from memory
+        :return:
+        """
         self.master_pass_hash = None
 
     def add(self, url, username, password, note=""):
+        """
+        Adds password to database
+        :param url: URL or domain of a service, for which the password is used
+        :param username: Username for given service
+        :param password: Plain text password for given service
+        :param note: User's note
+        :return:
+        """
         enc_pass = self.encrypt(password, self.master_pass_hash)
         self.db_manager.insert(username, password=enc_pass['cipher_text'], salt=enc_pass['salt'],
                                nonce=enc_pass['nonce'], tag=enc_pass['tag'], url=url, note=note)
 
     def get_by_id(self, row_id):
+        """
+        Returns one row from the database with given id
+        :param row_id: ID of the row that is needed
+        :return: Tuple of (row_id, url, username, password, note), password is already decrypted
+        """
         r_id, url, username, password, salt, nonce, tag, note = self.db_manager.get_by_id(row_id)
         try:
             password = self.decrypt({
@@ -164,6 +196,15 @@ class PasswordManager:
         return row_id, url, username, password, note
 
     def update_by_id(self, row_id, url, username, password, note=""):
+        """
+        Updates a row with given id
+        :param row_id: ID of a row to update
+        :param url: URL or domain of a service, for which the password is used
+        :param username: Username for given service
+        :param password: Password for given service
+        :param note: User's note'
+        :return: True if updated successfully, False otherwise
+        """
         salt_dict, _ = db_manager.get_salt_by_id(row_id, self.master_pass_hash)
         if salt_dict is None:
             print('Error getting salts', file=sys.stderr)
@@ -177,4 +218,9 @@ class PasswordManager:
                                             url, note, password_enc['salt'], password_enc['nonce'], password_enc['tag'])
 
     def delete_by_id(self, row_id):
+        """
+        Deletes a row from the database
+        :param row_id: ID of row to be deleted
+        :return:
+        """
         self.db_manager.delete_by_id(row_id)

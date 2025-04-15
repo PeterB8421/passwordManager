@@ -10,6 +10,7 @@ COLOR_ERROR = "red"
 
 INPUT_WIDTH = 50
 
+
 class PasswordManagerApp(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -19,12 +20,13 @@ class PasswordManagerApp(tk.Tk):
         style = ttk.Style(self)
         style.configure(".", font=("Arial", 12))
 
-        # Center the window a bit (for aesthetics)
+        # GUI resolution
         self.geometry("1200x800")
 
+        # Password manager instance
         self.pm = PasswordManager()
 
-        # Create frames for "login" and "main screen"
+        # Login, main, add, edit and generator screens
         self.login_frame = LoginFrame(self)
         self.main_frame = MainScreenFrame(self)
         self.add_frame = AddPasswordFrame(self)
@@ -33,7 +35,7 @@ class PasswordManagerApp(tk.Tk):
 
         self.current_frame = self.login_frame
 
-        # Show the login frame first
+        # Show the login screen first
         self.login_frame.pack(fill="both", expand=True)
 
     def show_main_screen(self):
@@ -77,9 +79,9 @@ def show_temporary_popup(root, message, color, duration_ms=2000):
     """Small temporary popup for displaying messages."""
     popup = tk.Toplevel(root)
     popup.title("")  # no title
-    popup.overrideredirect(True)  # remove window borders (optional)
+    popup.overrideredirect(True)  # remove window borders
 
-    # Place the popup near the main window
+    # Place the popup at the top of the main window
     x = root.winfo_rootx() + 200
     y = root.winfo_rooty()
     popup.geometry(f"+{x}+{y}")
@@ -104,6 +106,7 @@ class LoginFrame(tk.Frame):
             btn_text = "Create"
         self.label_instructions = tk.Label(self, text=label_text)
 
+        # Master password field
         self.entry_password = tk.Entry(self, show="*", width=INPUT_WIDTH)
         self.entry_password.bind("<Return>", self.check_password)
         self.entry_password.focus()
@@ -114,7 +117,7 @@ class LoginFrame(tk.Frame):
         self.entry_password.pack(pady=5)
         self.button_submit.pack(pady=5)
         self.label_requirements = None
-        # If master password is not yet set, display requirements
+        # If master password is not yet set, display password policy
         if not self.master.pm.is_set:
             requirements_text = (
                 "Password must be at least 8 characters.\n"
@@ -143,6 +146,7 @@ class LoginFrame(tk.Frame):
                 show_temporary_popup(self, "Login failed!", COLOR_ERROR)
 
     def hide_policy(self):
+        """Hides password policy text"""
         if self.label_requirements is not None:
             self.label_requirements.pack_forget()
 
@@ -152,7 +156,7 @@ class AddPasswordFrame(tk.Frame):
         super().__init__(master)
         self.master = master  # Reference to the main application (PasswordManagerApp)
 
-        # Title / Instructions
+        # Title
         label_title = tk.Label(self, text="Add New Password", font=("Arial", 14, "bold"))
         label_title.grid(row=0, column=0, columnspan=2, pady=10)
 
@@ -187,20 +191,23 @@ class AddPasswordFrame(tk.Frame):
         btn_cancel.pack(side="left", padx=5)
 
     def save_password(self):
-        """Gather data from fields and add it to the password database."""
+        """Gather data from fields and send it to password manager to save."""
         domain = self.entry_domain.get()
         username = self.entry_username.get()
         password = self.entry_password.get()
         note = self.entry_note.get()
 
+        # Check if all required fields are filled
         if not domain or not username or not password:
             messagebox.showwarning("Warning", "Please fill in Domain, Username, and Password.")
             return
 
+        # Add password to database
         self.master.pm.add(domain, username, password, note)
 
         show_temporary_popup(self, "Password saved!", COLOR_SUCCESS)
 
+        # Clear input fields
         self.entry_domain.delete(0, 'end')
         self.entry_username.delete(0, 'end')
         self.entry_password.delete(0, 'end')
@@ -267,11 +274,13 @@ class EditPasswordFrame(tk.Frame):
 
     def load_record(self, record_id):
         """
-        Called by the main app when we navigate to this frame.
-        Grabs the data from the manager, fills in the form.
+        When sets values to input fields from the database
+        :param record_id: ID of the password that is being edited
+        :return
         """
         self.selected_id = record_id
-        record = self.master.pm.get_by_id(record_id)  # you need a method that returns (id, domain, user, pwd, note)
+        # Get values from database
+        record = self.master.pm.get_by_id(record_id)
 
         if record is None:
             messagebox.showerror("Error", "Record not found.")
@@ -303,9 +312,10 @@ class EditPasswordFrame(tk.Frame):
         note = self.entry_note.get()
 
         if not domain or not username or not password:
-            messagebox.showwarning("Warning", "Please fill required fields.")
+            messagebox.showwarning("Warning", "Please fill required fields (domain, username, password).")
             return
 
+        # Update row in database
         success = self.master.pm.update_by_id(self.selected_id, domain, username, password, note)
         if success:
             show_temporary_popup(self, "Changes saved!", COLOR_SUCCESS)
@@ -326,6 +336,7 @@ class EditPasswordFrame(tk.Frame):
         pass
         confirm = messagebox.askyesno("Confirm", "Are you sure you want to delete this record?")
         if confirm:
+            # Delete row from database
             self.master.pm.delete_by_id(self.selected_id)
             show_temporary_popup(self, "Password deleted!", COLOR_SUCCESS)
             self.master.show_main_screen()
@@ -352,7 +363,7 @@ class EditPasswordFrame(tk.Frame):
 class PasswordGeneratorFrame(tk.Frame):
     def __init__(self, master):
         super().__init__(master)
-        self.master = master  # reference to your main application
+        self.master = master
         self.generated_password = ""
 
         # Title
@@ -375,7 +386,7 @@ class PasswordGeneratorFrame(tk.Frame):
         self.label_password = tk.Label(self, text="", fg="blue", font=("Consolas", 10))
         self.label_password.grid(row=3, column=1, sticky="w", padx=5, pady=5)
 
-        # Copy & Back buttons
+        # Copy and Back buttons
         button_frame = tk.Frame(self)
         button_frame.grid(row=4, column=0, columnspan=2, pady=10)
 
@@ -424,6 +435,7 @@ class MainScreenFrame(tk.Frame):
 
         top_frame = tk.Frame(self)
         top_frame.pack(side="top", fill="x")
+        # Logout button
         logout_btn = tk.Button(top_frame, text="Logout", command=self.logout)
         logout_btn.pack(side="left", padx=10, pady=10)
 
@@ -440,6 +452,7 @@ class MainScreenFrame(tk.Frame):
         add_button = tk.Button(bottom_frame, text="Add password", command=self.add)
         add_button.pack(side="right", padx=10, pady=10)
 
+        # Generator button
         gen_btn = tk.Button(bottom_frame, text="Generator", command=self.generator)
         gen_btn.pack(side="right", padx=10, pady=10)
 
@@ -507,17 +520,21 @@ class MainScreenFrame(tk.Frame):
             self.edit_record(record_id)
 
     def edit_record(self, record_id):
+        """Change to password edit screen"""
         self.master.show_edit_screen(record_id)
 
     def logout(self):
+        """Logout and show the login screen"""
         self.master.pm.logout()
         show_temporary_popup(self, "Logout successful!", COLOR_SUCCESS)
         self.master.show_login_screen()
 
     def add(self):
+        """Change to password add screen"""
         self.master.show_add_screen()
 
     def generator(self):
+        """Change to password generator screen"""
         self.master.show_generator_screen()
 
 

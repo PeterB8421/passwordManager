@@ -13,7 +13,7 @@ class MasterPassManager:
     def is_set(self):
         """
         Check if master password is set.
-        :return:
+        :return: True if master password is set, otherwise False
         """
         query = 'SELECT setup FROM masterpass'
         self.cursor.execute(query)
@@ -60,11 +60,22 @@ class MasterPassManager:
         return b64decode(result[0])
 
     def set_test_str(self, test_str: str, nonce: str, tag: str):
+        """
+        Saves encrypted test string to the database
+        :param test_str: Encrypted test string
+        :param nonce: Nonce used by AES
+        :param tag: MAC used by AES
+        :return:
+        """
         query = 'UPDATE masterpass SET test_str = %s, nonce = %s, tag = %s'
         self.cursor.execute(query, [test_str, nonce, tag])
         self.db.commit()
 
     def get_test_str(self):
+        """
+        Returns encrypted test string from the database
+        :return: Dict of {cipher_text, salt, nonce, tag}
+        """
         query = 'SELECT test_str, salt, nonce, tag FROM masterpass'
         self.cursor.execute(query)
         result = self.cursor.fetchone()

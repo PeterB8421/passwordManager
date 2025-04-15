@@ -45,17 +45,38 @@ class DbManager:
         return self.cursor.fetchone()
 
     def get_all(self):
+        """
+        Returns all rows from the database.
+        :return: List of tuples with row data
+        """
         query = "SELECT * FROM passmanager"
         self.cursor.execute(query)
         return self.cursor.fetchall()
 
     def update_by_id(self, row_id, username, password, url, note, salt, nonce, tag):
+        """
+        Updates a row in the database using the given id.
+        :param row_id: ID of row to update.
+        :param username: Username for given service.
+        :param password: Password for given service.
+        :param url: URl or domain for given service.
+        :param note: User's note to set for that row
+        :param salt: Salt for this password
+        :param nonce: Nonce for AES algorithm
+        :param tag: MAC for AES algorithm
+        :return: True if update was successful.
+        """
         query = "UPDATE passmanager SET url = %s, note = %s, username = %s, password = %s, salt = %s, nonce = %s, tag = %s WHERE id = %s"
         self.cursor.execute(query, [url, note, username, password, salt, nonce, tag, row_id])
         self.db.commit()
         return True
 
     def delete_by_id(self, row_id):
+        """
+        Deletes a row from the database using the given id.
+        :param row_id: ID of row to delete.
+        :return:
+        """
         query = "DELETE FROM passmanager WHERE id = %s"
         self.cursor.execute(query, [row_id])
         self.db.commit()
