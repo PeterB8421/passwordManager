@@ -1,20 +1,34 @@
-import csv
-import getpass
-import io
-import os.path
+import re
+import string
+import secrets
 import sys
 
-import cryptography.fernet
 from argon2.low_level import hash_secret_raw, Type
 from Cryptodome.Cipher import AES
 from Cryptodome.Random import get_random_bytes
-import hashlib
 from base64 import b64encode, b64decode
 
 import db_manager
-import file_enc
 from db_manager import DbManager
 from master_pass_db import MasterPassManager
+
+
+def generate_password(length):
+    # Minimum length
+    if length < 8:
+        return None
+
+    # Character set
+    chars = string.ascii_letters + string.digits + "@$!%*?&#"
+    return ''.join(secrets.choice(chars) for _ in range(length))
+
+
+def verify_pass_strength(password: str):
+    """Checks if password is strong enough."""
+    if len(password) < 8:
+        return False
+    match = re.search(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#]).+$", password)
+    return match is not None
 
 
 class PasswordManager:
@@ -41,7 +55,7 @@ class PasswordManager:
         """
         if salt is None:
             salt = get_random_bytes(AES.block_size)
-        pk = hashlib.scrypt(key, salt=salt, n=2 ** 14, r=8, p=1, dklen=32)
+        pk = self.hash_master_pass(key, salt, 32)
 
         cipher_config = AES.new(pk, AES.MODE_GCM)
         cipher_text, tag = cipher_config.encrypt_and_digest(bytes(plain_text, 'utf-8'))
@@ -64,14 +78,15 @@ class PasswordManager:
         nonce = b64decode(enc_dict['nonce'])
         tag = b64decode(enc_dict['tag'])
 
-        pk = hashlib.scrypt(key, salt=salt, n=2 ** 14, r=8, p=1, dklen=32)
+        pk = self.hash_master_pass(key, salt, 32)
         cipher = AES.new(pk, AES.MODE_GCM, nonce=nonce)
         decrypted = cipher.decrypt_and_verify(cipher_text, tag)
         return decrypted
 
-    def hash_master_pass(self, password: bytes, salt):
+    def hash_master_pass(self, password: bytes, salt, hash_len=32):
         """
         Hashes master password.
+        :param hash_len: Length of the final hash
         :param password: Master password for hashing.
         :param salt: Master password salt.
         :return: bytes: Hashed master password.
@@ -79,7 +94,6 @@ class PasswordManager:
         time_cost = 3
         memory_cost = 65536
         parallelism = 4
-        hash_len = 32
         derived_hash = hash_secret_raw(
             secret=password,
             salt=salt,
@@ -96,9 +110,13 @@ class PasswordManager:
         Sets up testing file for authentication.
         :return:
         """
+        if not verify_pass_strength(master_password):
+            print("Weak master password!", file=sys.stderr)
+            return False
         # Get master password hash and generate salt for master password. Only salt is stored
         salt = self.master_passmgr.set_master_salt()
         if not salt:
+            print("Error generating salt!", file=sys.stderr)
             return False
         salt = self.master_passmgr.get_salt()
         self.master_pass_hash = self.hash_master_pass(master_password.encode('utf-8'), salt)
@@ -128,21 +146,17 @@ class PasswordManager:
 
     def add(self, url, username, password, note=""):
         enc_pass = self.encrypt(password, self.master_pass_hash)
-        self.db_manager.insert(username, key=self.master_pass_hash, password=enc_pass['cipher_text'], salt=enc_pass['salt'],
+        self.db_manager.insert(username, password=enc_pass['cipher_text'], salt=enc_pass['salt'],
                                nonce=enc_pass['nonce'], tag=enc_pass['tag'], url=url, note=note)
 
     def get_by_id(self, row_id):
-        r_id, url, username, password, note = self.db_manager.get_by_id(row_id)
-        salt_dict, _ = db_manager.get_salt_by_id(row_id, self.master_pass_hash)
-        if salt_dict is None:
-            print('Error getting salts', file=sys.stderr)
-            return row_id, url, username, password, note
+        r_id, url, username, password, salt, nonce, tag, note = self.db_manager.get_by_id(row_id)
         try:
             password = self.decrypt({
                 'cipher_text': password,
-                'salt': salt_dict['salt'],
-                'nonce': salt_dict['nonce'],
-                'tag': salt_dict['tag']
+                'salt': salt,
+                'nonce': nonce,
+                'tag': tag
             }, self.master_pass_hash)
         except ValueError:
             password = None
@@ -159,8 +173,8 @@ class PasswordManager:
         except ValueError:
             print('Error encrypting password', file=sys.stderr)
             return False
-        return self.db_manager.update_by_id(self.master_pass_hash, row_id, username, password_enc['cipher_text'],
+        return self.db_manager.update_by_id(row_id, username, password_enc['cipher_text'],
                                             url, note, password_enc['salt'], password_enc['nonce'], password_enc['tag'])
 
     def delete_by_id(self, row_id):
-        self.db_manager.delete_by_id(row_id, self.master_pass_hash)
+        self.db_manager.delete_by_id(row_id)

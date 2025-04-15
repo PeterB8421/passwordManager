@@ -1,15 +1,4 @@
 import mysql.connector
-import file_enc
-
-
-def get_salt_by_id(record_id, key):
-    salts = file_enc.read_from_csv('data/salts.csv', key)
-    salt_dict = None
-    for record in salts:
-        if record['id'] == str(record_id):
-            salt_dict = record
-            break
-    return salt_dict, salts
 
 
 class DbManager:
@@ -17,7 +6,7 @@ class DbManager:
         self.db = mysql.connector.connect(host='localhost', user='python', password='MYOP9317a', database='python', charset='utf8')
         self.cursor = self.db.cursor()
 
-    def insert(self, username, password, url, salt, nonce, tag, key, note=""):
+    def insert(self, username, password, url, salt, nonce, tag, note=""):
         """
         Inserts a password into the database.
         :param username: Username for given service
@@ -30,14 +19,9 @@ class DbManager:
         :param note: Note for given password.
         :return:
         """
-        query = "INSERT INTO passmanager (username, password, url, note) VALUES (%s, %s, %s, %s)"
-        self.cursor.execute(query, (username, password, url, note))
+        query = "INSERT INTO passmanager (username, password, url, note, salt, nonce, tag) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+        self.cursor.execute(query, (username, password, url, note, salt, nonce, tag))
         self.db.commit()
-        id = self.cursor.lastrowid
-        salts = file_enc.read_from_csv('data/salts.csv', key)
-        new_row = {'id': id, 'salt': salt, 'nonce': nonce, 'tag': tag}
-        salts.append(new_row)
-        file_enc.write_to_csv(salts, 'data/salts.csv', ['id', 'salt', 'nonce', 'tag'], key)
 
     def get_by_url(self, url):
         """
@@ -65,30 +49,13 @@ class DbManager:
         self.cursor.execute(query)
         return self.cursor.fetchall()
 
-    def update_by_id(self, key, row_id, username, password, url, note, salt, nonce, tag):
-        salt_dict, salts = get_salt_by_id(row_id, key)
-        if salt_dict is None:
-            return False
-        print('Before: ', salts)
-        salts.remove(salt_dict)
-        salt_dict['salt'] = salt
-        salt_dict['nonce'] = nonce
-        salt_dict['tag'] = tag
-        salts.append(salt_dict)
-        print('After: ', salts)
-        file_enc.write_to_csv(salts, 'data/salts.csv', ['id', 'salt', 'nonce', 'tag'], key)
-
-        query = "UPDATE passmanager SET url = %s, note = %s, username = %s, password = %s WHERE id = %s"
-        self.cursor.execute(query, [url, note, username, password, row_id])
+    def update_by_id(self, row_id, username, password, url, note, salt, nonce, tag):
+        query = "UPDATE passmanager SET url = %s, note = %s, username = %s, password = %s, salt = %s, nonce = %s, tag = %s WHERE id = %s"
+        self.cursor.execute(query, [url, note, username, password, salt, nonce, tag, row_id])
         self.db.commit()
         return True
 
-    def delete_by_id(self, row_id, key):
+    def delete_by_id(self, row_id):
         query = "DELETE FROM passmanager WHERE id = %s"
         self.cursor.execute(query, [row_id])
         self.db.commit()
-
-        salt_dict, salts = get_salt_by_id(row_id, key)
-        if salt_dict is not None:
-            salts.remove(salt_dict)
-            file_enc.write_to_csv(salts, 'data/salts.csv', ['id', 'salt', 'nonce', 'tag'], key)
