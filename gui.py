@@ -1,5 +1,7 @@
 import tkinter
 import tkinter as tk
+import string
+import secrets
 from tkinter import ttk, messagebox
 from pass_man import PasswordManager
 
@@ -19,6 +21,7 @@ class PasswordManagerApp(tk.Tk):
         self.main_frame = MainScreenFrame(self)
         self.add_frame = AddPasswordFrame(self)
         self.edit_frame = EditPasswordFrame(self)
+        self.generator_frame = PasswordGeneratorFrame(self)
 
         self.current_frame = self.login_frame
 
@@ -52,6 +55,11 @@ class PasswordManagerApp(tk.Tk):
         self.current_frame = self.edit_frame
         self.edit_frame.pack(fill="both", expand=True)
         self.edit_frame.load_record(record_id)
+
+    def show_generator_screen(self):
+        self.current_frame.pack_forget()
+        self.current_frame = self.generator_frame
+        self.current_frame.pack(fill="both", expand=True)
 
 
 def show_temporary_popup(root, message, color, duration_ms=2000):
@@ -308,6 +316,78 @@ class EditPasswordFrame(tk.Frame):
             self.show_password_btn.config(text="Show")
 
 
+class PasswordGeneratorFrame(tk.Frame):
+    def __init__(self, master):
+        super().__init__(master)
+        self.master = master  # reference to your main application
+        self.generated_password = ""
+
+        # Title
+        label_title = tk.Label(self, text="Password Generator", font=("Arial", 14, "bold"))
+        label_title.grid(row=0, column=0, columnspan=2, pady=10)
+
+        # Label + Spinbox: Password length
+        tk.Label(self, text="Password Length:").grid(row=1, column=0, sticky="e", padx=5, pady=5)
+        self.spin_length = tk.Spinbox(self, from_=8, to=64, width=5)
+        self.spin_length.grid(row=1, column=1, sticky="w", padx=5, pady=5)
+        self.spin_length.delete(0, tk.END)
+        self.spin_length.insert(0, "16")  # default length
+
+        # Generate Button
+        btn_generate = tk.Button(self, text="Generate", command=self.generate_password)
+        btn_generate.grid(row=2, column=0, columnspan=2, pady=5)
+
+        # Label to show the generated password
+        tk.Label(self, text="Generated Password:").grid(row=3, column=0, sticky="e", padx=5, pady=5)
+        self.label_password = tk.Label(self, text="", fg="blue", font=("Consolas", 10))
+        self.label_password.grid(row=3, column=1, sticky="w", padx=5, pady=5)
+
+        # Copy & Back buttons
+        button_frame = tk.Frame(self)
+        button_frame.grid(row=4, column=0, columnspan=2, pady=10)
+
+        btn_copy = tk.Button(button_frame, text="Copy to Clipboard", command=self.copy_password)
+        btn_copy.pack(side="left", padx=5)
+
+        btn_back = tk.Button(button_frame, text="Back", command=self.go_back)
+        btn_back.pack(side="left", padx=5)
+
+    def generate_password(self):
+        """Generate a random password using Python's 'secrets' for security."""
+        # Get length from Spinbox
+        try:
+            length = int(self.spin_length.get())
+        except ValueError:
+            show_temporary_popup(self, "Invalid password length entered!", "red")
+            return
+
+        # Minimum length
+        if length < 8:
+            show_temporary_popup(self, "Password must be at least 8 characters long!", "red")
+            return
+
+        # Character set
+        chars = string.ascii_letters + string.digits + string.punctuation
+
+        # Generate
+        self.generated_password = ''.join(secrets.choice(chars) for _ in range(length))
+        # Show in label
+        self.label_password.config(text=self.generated_password)
+
+    def copy_password(self):
+        """Copy the current generated password to the clipboard."""
+        if self.generated_password:
+            self.clipboard_clear()
+            self.clipboard_append(self.generated_password)
+            show_temporary_popup(self, "Password copied!", "lightblue")
+        else:
+            show_temporary_popup(self, "No password generated for copying!", "red")
+
+    def go_back(self):
+        """Return to the main screen (or whichever screen)."""
+        self.master.show_main_screen()
+
+
 class MainScreenFrame(tk.Frame):
     def __init__(self, master):
         super().__init__(master)
@@ -330,6 +410,9 @@ class MainScreenFrame(tk.Frame):
         # Add password button, aligned to the right
         add_button = tk.Button(bottom_frame, text="Add password", command=self.add)
         add_button.pack(side="right", padx=10, pady=10)
+
+        gen_btn = tk.Button(bottom_frame, text="Generator", command=self.generator)
+        gen_btn.pack(side="right", padx=10, pady=10)
 
         self.refresh()
 
@@ -366,7 +449,7 @@ class MainScreenFrame(tk.Frame):
                 self.tree.insert(
                     "",
                     tk.END,
-                    values=(domain, username, note, "Edit"),
+                    values=(domain, username, note, "Edit/Copy/Show/Delete"),
                     tags=(str(row_id),)  # store ID as a tag
                 )
 
@@ -387,15 +470,12 @@ class MainScreenFrame(tk.Frame):
         if not row_id:
             return
 
-        if column == "#4":  # the 4th heading is 'Action'
-            item = self.tree.item(row_id)
-            # The tag we assigned holds the DB row's ID
-            record_tags = item["tags"]  # e.g. ('2',)
-            if record_tags:
-                record_id = int(record_tags[0])  # convert to int
-                action_value = item["values"][3]  # "Edit"
-                if action_value == "Edit":
-                    self.edit_record(record_id)
+        item = self.tree.item(row_id)
+        # The tag assigned that holds the DB row's ID
+        record_tags = item["tags"]  # e.g. ('2',)
+        if record_tags:
+            record_id = int(record_tags[0])  # convert to int
+            self.edit_record(record_id)
 
     def edit_record(self, record_id):
         self.master.show_edit_screen(record_id)
@@ -407,6 +487,9 @@ class MainScreenFrame(tk.Frame):
 
     def add(self):
         self.master.show_add_screen()
+
+    def generator(self):
+        self.master.show_generator_screen()
 
 
 if __name__ == "__main__":
