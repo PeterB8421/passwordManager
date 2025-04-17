@@ -51,6 +51,7 @@ class PasswordManagerApp(tk.Tk):
         self.current_frame = self.login_frame
         self.login_frame.entry_password.bind("<Return>", self.login_frame.check_password)
         self.login_frame.hide_policy()
+        self.login_frame.set_label_text()
         self.current_frame.pack(fill="both", expand=True)
 
     def show_add_screen(self):
@@ -107,9 +108,21 @@ class LoginFrame(tk.Frame):
         self.label_instructions = tk.Label(self, text=label_text)
 
         # Master password field
-        self.entry_password = tk.Entry(self, show="*", width=INPUT_WIDTH)
+        pw_frame = tk.Frame(self)
+        pw_frame.pack(pady=5)
+
+        # Password entry field
+        self.entry_password = tk.Entry(pw_frame, show="*", width=INPUT_WIDTH)
+        self.entry_password.pack(side="left")
         self.entry_password.bind("<Return>", self.check_password)
         self.entry_password.focus()
+
+        # Show/Hide button
+        self.show_password_btn = tk.Button(
+            pw_frame, text="Show", command=self.toggle_password, width=5
+        )
+        self.show_password_btn.pack(side="left", padx=5)
+
         self.button_submit = tk.Button(self, text=btn_text, command=self.check_password)
 
         # Layout
@@ -150,6 +163,32 @@ class LoginFrame(tk.Frame):
         if self.label_requirements is not None:
             self.label_requirements.pack_forget()
 
+    def toggle_password(self):
+        """
+        Toggle between showing and hiding the password text in 'entry_password'.
+        """
+        current_show = self.entry_password.cget("show")
+        if current_show == "*":
+            # It's currently hidden; show it
+            self.entry_password.config(show="")
+            self.show_password_btn.config(text="Hide")
+        else:
+            # It's currently shown; hide it
+            self.entry_password.config(show="*")
+            self.show_password_btn.config(text="Show")
+
+    def set_label_text(self):
+        if self.master.pm.is_set:
+            label_text = "Enter Master Password:"
+            btn_text = "Login"
+        else:
+            label_text = "Create Master Password:"
+            btn_text = "Create"
+        self.label_instructions.config(text=label_text)
+        self.label_instructions.pack()
+        self.button_submit.config(text=btn_text)
+        self.button_submit.pack(pady=5)
+
 
 class AddPasswordFrame(tk.Frame):
     def __init__(self, master):
@@ -174,6 +213,14 @@ class AddPasswordFrame(tk.Frame):
         tk.Label(self, text="Password:").grid(row=3, column=0, sticky="e", padx=5, pady=5)
         self.entry_password = tk.Entry(self, show="*", width=INPUT_WIDTH)  # masked
         self.entry_password.grid(row=3, column=1, padx=5, pady=5)
+
+        # Show/Hide button
+        self.show_password_btn = tk.Button(self, text="Show", command=self.toggle_password, width=6)
+        self.show_password_btn.grid(row=3, column=2, padx=5, pady=5)
+
+        # Generate button
+        self.generate_btn = tk.Button(self, text="Generate", command=self.generate_password)
+        self.generate_btn.grid(row=3, column=3, padx=5, pady=5)
 
         # Note Field
         tk.Label(self, text="Note:").grid(row=4, column=0, sticky="e", padx=5, pady=5)
@@ -222,6 +269,27 @@ class AddPasswordFrame(tk.Frame):
         self.entry_note.delete(0, 'end')
         self.master.show_main_screen()
 
+    def generate_password(self, length: int = 32):
+        """Generate a random password and put it in the password entry field."""
+        new_pwd = pass_man.generate_password(length)
+
+        self.entry_password.delete(0, tk.END)
+        self.entry_password.insert(0, new_pwd)
+
+    def toggle_password(self):
+        """
+        Toggle between showing and hiding the password text in 'entry_password'.
+        """
+        current_show = self.entry_password.cget("show")
+        if current_show == "*":
+            # It's currently hidden; show it
+            self.entry_password.config(show="")
+            self.show_password_btn.config(text="Hide")
+        else:
+            # It's currently shown; hide it
+            self.entry_password.config(show="*")
+            self.show_password_btn.config(text="Show")
+
 
 class EditPasswordFrame(tk.Frame):
     def __init__(self, master):
@@ -250,6 +318,10 @@ class EditPasswordFrame(tk.Frame):
         # Button to toggle password visibility
         self.show_password_btn = tk.Button(self, text="Show", command=self.toggle_password)
         self.show_password_btn.grid(row=3, column=2, padx=5, pady=5)
+
+        # Generate button
+        self.generate_btn = tk.Button(self, text="Generate", command=self.generate_password)
+        self.generate_btn.grid(row=3, column=3, padx=5, pady=5)
 
         # Note
         tk.Label(self, text="Note:").grid(row=4, column=0, sticky="e", padx=5, pady=5)
@@ -359,6 +431,13 @@ class EditPasswordFrame(tk.Frame):
             self.entry_password.config(show="*")
             self.show_password_btn.config(text="Show")
 
+    def generate_password(self, length: int = 32):
+        """Generate a random password and put it in the password entry field."""
+        new_pwd = pass_man.generate_password(length)
+
+        self.entry_password.delete(0, tk.END)
+        self.entry_password.insert(0, new_pwd)
+
 
 class PasswordGeneratorFrame(tk.Frame):
     def __init__(self, master):
@@ -443,7 +522,12 @@ class MainScreenFrame(tk.Frame):
         self.label_title = tk.Label(self, text="Password database", font=("Arial", 14, "bold"))
         self.label_title.pack(pady=10)
 
+        # Hint for quick copy
+        self.label_note = tk.Label(self, text="Note: Right click to quickly copy the password")
+        self.label_note.pack(pady=10)
+
         self.tree = None
+        self.empty_label = None
 
         bottom_frame = tk.Frame(self)
         bottom_frame.pack(side="bottom", fill="x")
@@ -467,9 +551,13 @@ class MainScreenFrame(tk.Frame):
 
         rows = self.master.pm.get_all_passwords()
         if not rows:
-            empty_label = tk.Label(self, text="The database is empty")
-            empty_label.pack()
+            if self.empty_label is None:
+                self.empty_label = tk.Label(self, text="The database is empty")
+                self.empty_label.pack()
         else:
+            if self.empty_label is not None:
+                self.empty_label.pack_forget()
+                self.empty_label = None
             self.tree = ttk.Treeview(
                 self,
                 columns=("Domain", "Username", "Note", "Action"),
@@ -497,8 +585,10 @@ class MainScreenFrame(tk.Frame):
 
             self.tree.pack(fill="both", expand=True)
 
-            # Bind click on the tree
+            # Left click opens edit screen
             self.tree.bind("<ButtonRelease-1>", self.on_tree_click)
+            # Right click copies password to clipboard
+            self.tree.bind("<Button-3>", self.on_tree_right_click)
 
     def on_tree_click(self, event):
         """Handle a click on the Treeview to see if the user clicked the 'Edit' column."""
@@ -506,7 +596,6 @@ class MainScreenFrame(tk.Frame):
         if region != "cell":
             return
 
-        column = self.tree.identify_column(event.x)  # '#1', '#2', '#3', '#4'
         row_id = self.tree.identify_row(event.y)
 
         if not row_id:
@@ -518,6 +607,35 @@ class MainScreenFrame(tk.Frame):
         if record_tags:
             record_id = int(record_tags[0])  # convert to int
             self.edit_record(record_id)
+
+    def on_tree_right_click(self, event):
+        """Copy the password of the clicked row to clipboard."""
+        row_id = self.tree.identify_row(event.y)
+        if not row_id:
+            return  # clicked on empty space
+
+        # Retrieve the DB record ID stored in tags
+        record_tags = self.tree.item(row_id)["tags"]
+        if not record_tags:
+            return
+        record_id = int(record_tags[0])
+
+        # Get row from database
+        record = self.master.pm.get_by_id(record_id)
+        if not record:
+            show_temporary_popup(self, "Error getting password from database!", COLOR_ERROR)
+            return
+
+        # Unpack database record
+        _, domain, _, password, *_ = record
+        if password is None:
+            show_temporary_popup(self, "Error decrypting password!", COLOR_ERROR)
+            return
+
+        # Copy to clipboard
+        self.clipboard_clear()
+        self.clipboard_append(password)
+        show_temporary_popup(self, f"Password for {domain} copied!", COLOR_INFO)
 
     def edit_record(self, record_id):
         """Change to password edit screen"""

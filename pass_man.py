@@ -132,6 +132,7 @@ class PasswordManager:
         self.master_pass_hash = self.hash_master_pass(master_password.encode('utf-8'), salt)
         result = self.encrypt(self.TEST_STR, self.master_pass_hash, salt)
         self.master_passmgr.set_test_str(result['cipher_text'], result['nonce'], result['tag'])
+        self.is_set = True
         return True
 
     def authenticate(self, master_password):
