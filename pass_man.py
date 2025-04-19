@@ -56,14 +56,14 @@ class PasswordManager:
 
     def encrypt(self, plain_text, key: bytes, salt=None):
         """
-        Encrypts plaintext using AES encryption and scrypt to derive key.
+        Encrypts plaintext using AES encryption and Argon2id to derive key.
         :param salt: Optional: Salt used for encryption, if not provided, salt will be randomly generated.
         :param plain_text: Text to be encrypted.
         :param key: Key to be used for AES encryption, actual key will be derived from this value.
         :return: Dict of cipher text, salt, nonce and tag.
         """
         if salt is None:
-            salt = get_random_bytes(AES.block_size)
+            salt = get_random_bytes(16)
         pk = self.hash_master_pass(key, salt, 32)
 
         cipher_config = AES.new(pk, AES.MODE_GCM)
