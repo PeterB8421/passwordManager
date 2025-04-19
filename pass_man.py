@@ -100,9 +100,9 @@ class PasswordManager:
         :param salt: Master password salt.
         :return: bytes: Hashed master password.
         """
-        time_cost = 3
-        memory_cost = 65536
-        parallelism = 4
+        time_cost = 4
+        memory_cost = 9216
+        parallelism = 1
         derived_hash = hash_secret_raw(
             secret=password,
             salt=salt,

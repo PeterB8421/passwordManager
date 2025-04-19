@@ -2,12 +2,18 @@ import sys
 from Cryptodome.Random import get_random_bytes
 import mysql.connector
 from base64 import b64encode, b64decode
+from db_manager import get_config
 
 
 class MasterPassManager:
     def __init__(self):
-        self.db = mysql.connector.connect(host='localhost', user='python', password='MYOP9317a', database='python',
-                                          charset='utf8')
+        try:
+            cfg = get_config()
+        except ValueError as e:
+            print(f'Config file incomplete! {e}', file=sys.stderr)
+            exit(1)
+        self.db = mysql.connector.connect(host=cfg['host'], user=cfg['user'], password=cfg['password'],
+                                          database=cfg['database'], charset='utf8')
         self.cursor = self.db.cursor()
 
     def is_set(self):

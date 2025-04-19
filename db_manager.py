@@ -1,9 +1,42 @@
+import sys
+
 import mysql.connector
+
+
+def get_config(filename='config.cfg'):
+    required_keys = {"host", "user", "password", "database"}
+    cfg = {}
+
+    with open(filename, "r", encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line:
+                continue
+
+            if ":" not in line:
+                continue
+
+            key, value = [part.strip() for part in line.split(":", 1)]
+            if key in required_keys:
+                # save only expected keys
+                cfg[key] = value
+
+    missing = required_keys - cfg.keys()
+    if missing:
+        raise ValueError(f"Missing config item(s): {', '.join(missing)}")
+
+    return cfg
 
 
 class DbManager:
     def __init__(self):
-        self.db = mysql.connector.connect(host='localhost', user='python', password='MYOP9317a', database='python', charset='utf8')
+        try:
+            cfg = get_config()
+        except ValueError as e:
+            print(f'Config file incomplete! {e}', file=sys.stderr)
+            exit(1)
+        self.db = mysql.connector.connect(host=cfg['host'], user=cfg['user'], password=cfg['password'],
+                                          database=cfg['database'], charset='utf8')
         self.cursor = self.db.cursor()
 
     def insert(self, username, password, url, salt, nonce, tag, note=""):
